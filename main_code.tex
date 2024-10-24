@@ -1,0 +1,147 @@
+\documentclass[10pt,a4paper]{article}
+
+\edef\restoreparindent{\parindent=\the\parindent\relax}
+\usepackage[dvipdfmx]{hyperref}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{amsmath}
+\usepackage[yyyymmdd]{datetime}
+\usepackage[usestackEOL]{stackengine}
+\usepackage{siunitx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{color}
+\usepackage[T1]{fontenc}
+\usepackage{FiraMono}
+\usepackage{array}
+\usepackage{enumerate}
+\usepackage{float}
+\usepackage{fancyhdr}
+\usepackage{latexsym}
+\usepackage{listings}
+\usepackage{lastpage}
+\usepackage{multirow}
+\usepackage{parskip}
+\usepackage{times}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{subfiles}
+\usepackage{subcaption}
+\usepackage{blindtext}
+\usepackage{indentfirst}
+\usepackage[multi,deluxe]{otf}
+\usepackage[flushleft]{threeparttable}
+
+\restoreparindent
+\graphicspath{{./images/}}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+\lstset{ %
+  language=[Motorola68k]Assembler,    % the language of the code
+  basicstyle=\fontfamily{FiraMono-TLF}\selectfont\footnotesize,  % the size of the fonts that are used for the code
+  numbers=left,                       % where to put the line-numbers
+  numberstyle=\tiny\color{gray},      % the style that is used for the line-numbers
+  stepnumber=1,                       % the step between two line-numbers. If it's 1, each line
+                                      % will be numbered
+  numbersep=5pt,                      % how far the line-numbers are from the code
+  showspaces=false,                   % show spaces adding particular underscores
+  showstringspaces=false,             % underline spaces within strings
+  showtabs=false,                     % show tabs within strings adding particular underscores
+  frame=single,                       % adds a frame around the code
+  rulecolor=\color{black},            % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. commens (green here))
+  tabsize=4,                          % sets default tabsize to 2 spaces
+  breaklines=true,                    % sets automatic line breaking
+  breakatwhitespace=false,            % sets if automatic breaks should only happen at whitespace
+  keywordstyle=\color{blue},          % keyword style
+  commentstyle=\color{dkgreen},       % comment style
+  stringstyle=\color{mauve},          % string literal style
+  escapeinside={(*}{*)},              % if you want to add LaTeX within your code
+  morecomment=[l]{|},
+  morecomment=[s]{/*}{*/},
+}
+\let\origthelstnumber\thelstnumber
+\makeatletter
+\newcommand*\Suppressnumber{%
+  \lst@AddToHook{OnNewLine}{%
+    \let\thelstnumber\relax%
+     \advance\c@lstnumber-\@ne\relax%
+    }%
+}
+
+\newcommand*\Reactivatenumber[1]{%
+  \lst@AddToHook{OnNewLine}{%
+   \let\thelstnumber\origthelstnumber%
+   \setcounter{lstnumber}{\numexpr#1-1\relax}%
+   %\advance\c@lstnumber\@ne\relax%
+  }%
+}
+
+\makeatother
+
+\topmargin        0mm
+\oddsidemargin    0mm
+\evensidemargin   0mm
+\textwidth        160mm
+\textheight       237mm
+% \columnsep        7mm
+\headheight       0mm
+% \footskip         10mm
+\headsep          12pt
+\partopsep        0mm
+\textfloatsep     3mm
+\intextsep        3mm
+\DeclareUnicodeCharacter{0301}{\'}
+
+\renewcommand{\familydefault}{\sfdefault}
+
+\hypersetup{
+    colorlinks,
+    linktoc=all,
+    citecolor=black,
+    filecolor=black,
+    linkcolor=black,
+    urlcolor=black
+}
+
+\fancypagestyle{plain}{
+  \fancyhead{}
+  \fancyhead[L]{\textbf{Software Experiment 1}}
+  \fancyhead[C]{Echo back program}
+  \fancyhead[R]{\textbf{Group:} 1}
+}
+\pagestyle{plain}
+
+\cfoot{\thepage\ / \pageref{LastPage}}
+
+\begin{document}
+
+\begin{spacing}{1.2}
+
+    \begin{titlepage}
+        \begin{center}
+            \vspace*{6cm}
+            \Large
+            Laboratory of Electrical Engineering and Computer Science-II
+            \vspace*{2cm}
+            \Huge
+            \textbf{Echo back program - Group 1}
+        \end{center}
+        \begin{tabular}{lll}
+            \centering
+            \Large \textbf{Group members:}   & \Large \textbf{1TE18224Y} & \Large Lee Jiseok          \\
+                                      & \Large \textbf{1TE19247Y} & \Large Loa Champ Bodhibaum \\
+                                      & \Large \textbf{1TE19248G} & \Large Nimrawee Nattapat   \\
+                                      & \Large \textbf{1TE19249R} & \Large Liu Yiluo           \\
+                                      & \Large \textbf{1TE19250T} & \Large Sihanern Thitisan   \\
+                                      & \Large \textbf{1TE20257E} & \Large Nam Non             \\
+                                      &                           &                            \\                        
+            \Large \textbf{Submission date:} & \multicolumn{2}{l}{\Large \today}               
+            \end{tabular}
+        
+        \end{titlepage}
+    
+    \lstinputlisting{main.s}
+
+\end{spacing}
+\end{document}
