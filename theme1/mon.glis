@@ -1,0 +1,729 @@
+68K GAS  mon.s 			page 1
+
+
+   1               	.extern start
+   2               	.global monitor_begin
+   3               	
+   4               	********************
+   5               	** System call numbers 
+   6               	******************** 
+   7               	    .equ    SYSCALL_NUM_GETSTRING, 1 
+   8               	    .equ    SYSCALL_NUM_PUTSTRING, 2 
+   9               	    .equ    SYSCALL_NUM_RESET_TIMER, 3 
+  10               	    .equ    SYSCALL_NUM_SET_TIMER, 4 
+  11               	
+  12               	******************************
+  13               	** Head of the Register Group
+  14               	*******************************
+  15               	    .equ    REGBASE, 0xFFF000 | DMAP is used.
+  16               	    .equ    IOBASE, 0x00d00000
+  17               	*******************************
+  18               	** Registers Related to Interrupts
+  19               	*******************************
+  20               	    .equ    IVR, REGBASE+0x300 | Interrupt Vector Register
+  21               	    .equ    IMR, REGBASE+0x304 | Interrupt Mask Register
+  22               	    .equ    ISR, REGBASE+0x30c | Interrupt Status Register
+  23               	    .equ    IPR, REGBASE+0x310 | Interrupt Pending Register
+  24               	*******************************
+  25               	** Registers Related to the Timer
+  26               	*******************************
+  27               	    .equ    TCTL1, REGBASE+0x600 	|Timer1 Control Register
+  28               	    .equ    TPRER1, REGBASE+0x602 	|Timer1 Prescaler Register
+  29               	    .equ    TCMP1, REGBASE+0x604 	|Timer1 Compare Register
+  30               	    .equ    TCN1, REGBASE+0x608 	|Timer1 Counter Register
+  31               	    .equ    TSTAT1, REGBASE+0x60a 	|Timer1 Status Register
+  32               	*******************************
+  33               	** Registers Related to UART1 (Transmitter and Receiver)
+  34               	*******************************
+  35               	    .equ    USTCNT1, REGBASE+0x900 	|UART1 Status / Control Register
+  36               	    .equ    UBAUD1, REGBASE+0x902 	| UART 1 Baud Control Register
+  37               	    .equ    URX1, REGBASE+0x904 	| UART 1 Receiver register
+  38               	    .equ    UTX1, REGBASE+0x906 	| UART 1 Transmitter Register
+  39               	*******************************
+  40               	** LED
+  41               	*******************************
+  42               	    .equ    LED7, IOBASE+0x000002f 	| Register for LED mounted on the board
+  43               	    .equ    LED6, IOBASE+0x000002d 	| Refer to Appendix A.4.3.1 for a way to use
+  44               	    .equ    LED5, IOBASE+0x000002b
+  45               	    .equ    LED4, IOBASE+0x0000029
+  46               	    .equ    LED3, IOBASE+0x000003f
+  47               	    .equ    LED2, IOBASE+0x000003d
+  48               	    .equ    LED1, IOBASE+0x000003b
+  49               	    .equ    LED0, IOBASE+0x0000039
+  50               	    .equ    PUSHSW, 0xFFF419 		| Register for Push Switch mounted on the board
+  51               	****************************************************************
+  52               	** Reservation of the stack region
+  53               	****************************************************************
+  54               	.section .bss
+  55               	.even
+  56               	SYS_STK:
+  57 0000 0000 0000 	    .ds.b   0x4000  | System stack region
+68K GAS  mon.s 			page 2
+
+
+  57      0000 0000 
+  57      0000 0000 
+  57      0000 0000 
+  57      0000 0000 
+  58               	    .even
+  59               	SYS_STK_TOP:        | End of the system stack region
+  60               	****************************************************************
+  61               	** Initialization
+  62               	** A specific value has been set to internal device registers.
+  63               	** Refer to each register specification in Appendix B to know the above reason.
+  64               	****************************************************************
+  65               	.section .text
+  66               	.even
+  67               	
+  68               	monitor_begin :
+  69               	
+  70               	* Prohibit an interrupt into the supervisor and during performing various settings.
+  71 0000 46FC 2700 	    move.w  #0x2700, %SR	    | run at lv.0
+  72 0004 4FF9 0000 	    lea.l   SYS_STK_TOP, %SP  	    | Set SSP
+  72      0000 
+  73               	******************************
+  74               	**Initialization of the interrupt controller
+  75               	******************************
+  76 000a 13FC 0040 	    move.b  #0x40, IVR                  | Set the user interrupt vector number to 0x40+level.
+  76      00FF F300 
+  77 0012 23FC 00FF 	    move.l  #0x00ff3ff9, IMR            | Allow UART1 and timer interrupts
+  77      3FF9 00FF 
+  77      F304 
+  78 001c 21FC 0000 	    move.l  #SYSCALL, 0x080             | Set the interrupt for system call TRAP #0
+  78      0000 0080 
+  79 0024 21FC 0000 	    move.l  #INTERFACE, 0x110           | Set the interrupt subroutine for level 4 interrupt
+  79      0000 0110 
+  80 002c 21FC 0000 	    move.l  #TIMER_INTERRUPT, 0x118     | Set the interrupt subroutine for level 6 interrupt
+  80      0000 0118 
+  81               	******************************
+  82               	** Initialization related to the transmitter and the receiver (UART1)
+  83               	** (The interrupt level has been fixed to 4.)
+  84               	******************************
+  85 0034 33FC 0000 	    move.w  #0x0000, USTCNT1 | Reset
+  85      00FF F900 
+  86 003c 33FC E10C 	    move.w  #0xe10c, USTCNT1 | Transmission and reception possible - no parity, 1 stop, 8 bit, allo
+  86      00FF F900 
+  87 0044 33FC 0038 	    move.w  #0x0038, UBAUD1  | baud rate = 230400 bps
+  87      00FF F902 
+  88               	*************************
+  89               	** Initialization related to the timer (The interrupt level has been fixed to 6.)
+  90               	*************************
+  91 004c 33FC 0004 	    move.w  #0x0004, TCTL1  | Restart, an interrupt impossible
+  91      00FF F600 
+  92               	                            | Count the time with the 1/16 of the system clock
+  93               	                            | as a unit
+  94               	                            | Stop the timer use
+  95 0054 4EBA 023A 	    jsr		INIT_Q
+  96 0058 46FC 2000 	    move.w	#0x2000, %SR	/* supervisoe mode, lv.0 */	
+  97 005c 4EF9 0000 	    jmp 	start		
+  97      0000 
+  98               	    
+68K GAS  mon.s 			page 3
+
+
+  99               	****************************************************************
+ 100               	**    Program region
+ 101               	****************************************************************
+ 102               	MAIN:
+ 103               	    ** Set the running mode and the level (The process to move to 'the user mode')
+ 104 0062 46FC 0000 	    move.w	#0x0000, %SR		/*USER MODE, LEVEL 0*/
+ 105 0066 4FF9 0000 	    lea.l	USR_STK_TOP, %SP	/*set user stack*/
+ 105      0000 
+ 106               	    
+ 107               	    ** Start up RESET_TIMER by the system call
+ 108 006c 7003      	    move.l	#SYSCALL_NUM_RESET_TIMER, %d0
+ 109 006e 4E40      	    trap	#0
+ 110               		
+ 111               	    ** Start up SET_TIMER by the system call
+ 112 0070 7004      	    move.l	#SYSCALL_NUM_SET_TIMER, %d0
+ 113 0072 323C C350 	    move.w	#50000, %d1
+ 114 0076 243C 0000 	    move.l	#TT, %d2
+ 114      0000 
+ 115 007c 4E40      	    trap	#0
+ 116               	
+ 117               	
+ 118               	************************************* 
+ 119               	*    Test of sys_GETSTRING and sys_PUTSTRING 
+ 120               	*    Echo-back the input from a terminal 
+ 121               	************************************* 
+ 122               	
+ 123               	LOOP:
+ 124 007e 7001      	    move.l	#SYSCALL_NUM_GETSTRING, %d0
+ 125 0080 7200      	    move.l	#0, %d1			/*ch = 0*/
+ 126 0082 243C 0000 	    move.l	#BUF, %d2		/*p = #BUF*/
+ 126      0000 
+ 127 0088 263C 0000 	    move.l	#256, %d3		/*size = 256*/
+ 127      0100 
+ 128 008e 4E40      	    trap	#0
+ 129 0090 2600      	    move.l	%d0, %d3		/*size = %d0 (The length of a given string)*/
+ 130 0092 7002      	    move.l	#SYSCALL_NUM_PUTSTRING, %d0
+ 131 0094 7200      	    move.l	#0, %d1			/*ch = 0*/
+ 132 0096 243C 0000 	    move.l	#BUF, %d2		/*p = #BUF*/
+ 132      0000 
+ 133 009c 4E40      	    trap	#0
+ 134 009e 6000 FFDE 	    bra		LOOP		
+ 135               	
+ 136               	**************************************       
+ 137               	*    Test of the timer       
+ 138               	*    Display ‘******’ and CRLF (Carriage Return, Line Feed) five times       
+ 139               	*    Do RESET_TIMER after five times of the execution       
+ 140               	**************************************   
+ 141               	
+ 142               	TT:
+ 143 00a2 48E7 FFFE 	    movem.l	%d0-%d7/%a0-%a6, -(%sp)
+ 144 00a6 0C79 0005 	    cmpi.w	#5, TTC			/*Count with the counter TTC whether five times of the execution have been per
+ 144      0000 0000 
+ 145 00ae 6700 001C 	    beq		TTKILL			/*Stop the timer after five times of the execution*/
+ 146 00b2 7002      	    move.l	#SYSCALL_NUM_PUTSTRING, %d0
+ 147 00b4 7200      	    move.l	#0, %d1			/*ch = 0*/
+ 148 00b6 243C 0000 	    move.l	#TMSG, %d2		/*p = #TMSG*/
+ 148      0000 
+68K GAS  mon.s 			page 4
+
+
+ 149 00bc 7608      	    move.l	#8, %d3			/*size = 8*/
+ 150 00be 4E40      	    trap	#0
+ 151 00c0 0679 0001 	    addi.w	#1, TTC			/*Increment TTC counter by 1 and return*/
+ 151      0000 0000 
+ 152 00c8 6000 0006 	    bra		TTEND
+ 153               	    
+ 154               	TTKILL:
+ 155 00cc 7003      	    move.l	#SYSCALL_NUM_RESET_TIMER, %d0
+ 156 00ce 4E40      	    trap	#0
+ 157               	    
+ 158               	TTEND:
+ 159 00d0 4CDF 7FFF 	    movem.l	(%sp)+, %d0-%d7/%a0-%a6
+ 160 00d4 4E75      	    rts
+ 161               	
+ 162               	****************************************************************
+ 163               	**  System Call Interface:
+ 164               	**     Maker: Morris Kim, Rafii Hakim
+ 165               	**  Reviewer: Lim Liang Sun, Napat Limsuwan
+ 166               	****************************************************************
+ 167               	        
+ 168               	SYSCALL:
+ 169 00d6 0C80 0000 		cmpi.l	#SYSCALL_NUM_GETSTRING, %d0
+ 169      0001 
+ 170 00dc 6700 0022 		beq	CALL_GETSTRING
+ 171 00e0 0C80 0000 		cmpi.l	#SYSCALL_NUM_PUTSTRING, %d0
+ 171      0002 
+ 172 00e6 6700 001E 		beq	CALL_PUTSTRING
+ 173 00ea 0C80 0000 		cmpi.l	#SYSCALL_NUM_RESET_TIMER, %d0
+ 173      0003 
+ 174 00f0 6700 001A 		beq	CALL_RESET_TIMER
+ 175 00f4 0C80 0000 		cmpi.l	#SYSCALL_NUM_SET_TIMER, %d0
+ 175      0004 
+ 176 00fa 6700 0016 		beq	CALL_SET_TIMER
+ 177 00fe 4E73      		rte
+ 178               		
+ 179               	CALL_GETSTRING:
+ 180 0100 4EBA 0156 		jsr	GETSTRING
+ 181 0104 4E73      		rte
+ 182               	CALL_PUTSTRING:
+ 183 0106 4EBA 0106 		jsr	PUTSTRING
+ 184 010a 4E73      		rte
+ 185               	CALL_RESET_TIMER:
+ 186 010c 4EBA 002A 		jsr	RESET_TIMER
+ 187 0110 4E73      		rte
+ 188               	CALL_SET_TIMER:
+ 189 0112 4EBA 002E 		jsr	SET_TIMER
+ 190 0116 4E73      		rte
+ 191               	
+ 192               	
+ 193               	****************************************************************
+ 194               	**  Timer interrupt
+ 195               	**     Maker: Lim Liang Sun, Napat Limsuwan
+ 196               	**  Reviewer: Morris Kim, Rafii Hakim
+ 197               	****************************************************************
+ 198               	TIMER_INTERRUPT:
+ 199 0118 48E7 0080 		movem.l	%a0, -(%sp)		/* Evacuate registers */
+ 200 011c 0C79 0000 		cmp	#0, TSTAT1		/* Checks 0th bit of TSTAT1 */
+68K GAS  mon.s 			page 5
+
+
+ 200      00FF F60A 
+ 201 0124 6700 000C 		beq	TIMER_INTERRUPT_END
+ 202 0128 4279 00FF 		clr.w	TSTAT1			/* Reset TSTAT1 to 0 */
+ 202      F60A 
+ 203 012e 4EBA 0030 		jsr	CALL_RP
+ 204               	TIMER_INTERRUPT_END:
+ 205 0132 4CDF 0100 		movem.l	(%sp)+, %a0
+ 206 0136 4E73      		rte
+ 207               	
+ 208               	RESET_TIMER:
+ 209 0138 33FC 0004 		move.w 	#0x0004, TCTL1		/* Restart, an interrupt impossible, input is SYSCLK/16, prohibit timer */
+ 209      00FF F600 
+ 210 0140 4E75      		rts
+ 211               	SET_TIMER:
+ 212               		/* D1.W = t (timer interrupt cycle, every 0.t msec) */
+ 213               		/* D2.L = p (head address of the routine to be called at the interrupt occurrence) */
+ 214 0142 23C2 0000 		move.l	%d2, task_p		/* Substitute p for the global variable task_p*/
+ 214      0000 
+ 215 0148 33FC 00CE 		move.w	#0x00CE, TPRER1 	/* Let counter increment by 1 every 0.1 msec*/
+ 215      00FF F602 
+ 216 0150 33C1 00FF 		move.w	%d1, TCMP1		/* Substitute t for the TCMP1 */
+ 216      F604 
+ 217 0156 33FC 0015 		move.w	#0x0015, TCTL1		/* Restart, enable compare interrupt, input is SYSCLK/16, permit timer */
+ 217      00FF F600 
+ 218 015e 4E75      		rts
+ 219               	CALL_RP:
+ 220 0160 2079 0000 		move.l	(task_p), %a0
+ 220      0000 
+ 221 0166 4E90      		jsr	(%a0)
+ 222 0168 4E75      		rts
+ 223               	    
+ 224               	
+ 225               		
+ 226               	****************************************************************
+ 227               	**  UART1 Interrupt Interface
+ 228               	**     Maker: Morris Kim, Rafii Hakim
+ 229               	**  Reviewer: Lim Liang Sun, Napat Limsuwan
+ 230               	****************************************************************
+ 231               	INTERFACE:
+ 232 016a 48E7 F000 		movem.l	%d0-%d3,-(%sp)
+ 233               		
+ 234               		/* Receiver Interrupt */
+ 235 016e 3639 00FF 		move.w	URX1, %d3	/* Copy register URX1 to %d3.w*/
+ 235      F904 
+ 236 0174 0803 000D 		btst.l	#13, %d3 	/* Receiver FIFO? 1 = not empty, 0 = empty, yes it's confusing*/ 
+ 237 0178 6600 0020 		bne	CALL_INTERGET	/* Basically, this checks if it is a receiver interupt*/
+ 238               		
+ 239               		
+ 240               		/* Transmitter Interrupt */
+ 241 017c 3639 00FF 		move.w	UTX1, %d3
+ 241      F906 
+ 242 0182 0803 000F 		btst.l	#15, %d3	/* Transmitter FIFO empty? 1 = empty, 0 = not empty*/
+ 243 0186 6600 0008 		bne	CALL_INTERPUT	/* not equal to 1*/
+ 244               		
+ 245               		
+ 246               	INTERFACE_END:	
+ 247 018a 4CDF 000F 		movem.l	(%sp)+, %d0-%d3
+68K GAS  mon.s 			page 6
+
+
+ 248 018e 4E73      		rte
+ 249               		
+ 250               	CALL_INTERPUT:
+ 251 0190 7200      		move.l	#0, %d1
+ 252 0192 4EBA 0036 		jsr	INTERPUT
+ 253 0196 6000 FFF2 		bra	INTERFACE_END
+ 254               	
+ 255               	CALL_INTERGET:
+ 256 019a 7200      		move.l	#0, %d1
+ 257 019c 1403      		move.b	%d3, %d2	/* Copy lower 8 bits (data part) of %d3.w to %d2.b*/
+ 258 019e 4EBA 0006 		jsr	INTERGET
+ 259 01a2 6000 FFE6 		bra	INTERFACE_END
+ 260               	
+ 261               	****************************************************************
+ 262               	**  INTERGET
+ 263               	**     Maker: Zelal Denis Yildiz
+ 264               	**  Reviewer: Amira Ben Youssef
+ 265               	****************************************************************	
+ 266               	INTERGET:
+ 267               		/* Input: Channel ch -> %d1, received data -> %d2 */
+ 268               		/* No return value */
+ 269 01a6 48E7 8000 		movem.l	%d0, -(%sp)
+ 270 01aa 0C81 0000 		cmpi.l	#0, %d1
+ 270      0000 
+ 271 01b0 6600 0012 		bne	INTERGET_END
+ 272 01b4 7000      		move.l	#0, %d0		/* Queue #0 */
+ 273 01b6 1202      		move.b	%d2, %d1 	/* move data to d1*/
+ 274 01b8 4EBA 010C 		jsr	INQ		
+ 275 01bc 13FC 0061 		move.b	#'a', LED0
+ 275      00D0 0039 
+ 276               		
+ 277               	INTERGET_END:
+ 278 01c4 4CDF 0001 		movem.l	(%sp)+, %d0
+ 279 01c8 4E75      		rts
+ 280               	        
+ 281               	****************************************************************
+ 282               	**  INTERPUT
+ 283               	**	Maker: Amira Ben Youssef
+ 284               	**  Reviewer: Zelal Denis Yildiz
+ 285               	****************************************************************	
+ 286               	INTERPUT:
+ 287               		/* Input: Channel ch -> %d1 */
+ 288               		/* d0 = UTX1 at the end, we need %d0 to compare when we return to INTERFACE*/
+ 289               		/* No return value */
+ 290               		
+ 291 01ca 48E7 2000 		movem.l	%d2,-(%sp)
+ 292 01ce 40C2      		move.w	%SR, %d2	/* Save running level */
+ 293 01d0 46FC 2700 		move.w	#0x2700, %SR	/* Set running level to 7 */
+ 294 01d4 0C81 0000 		cmp.l	#0, %d1		/* Return without doing anything if ch=/=0*/
+ 294      0000 
+ 295 01da 6600 002A 		bne	INTERPUT_END
+ 296 01de 7001      		move.l	#1, %d0		/* Queue #1 */
+ 297 01e0 4EBA 0112 		jsr	OUTQ		/* Substitute it for data?? */
+ 298               					/* d1 is data */
+ 299 01e4 0C80 0000 		cmp.l	#0, %d0 
+ 299      0000 
+ 300 01ea 6700 0012 		beq	MASK_TRANSMITTER_INTERRUPT
+68K GAS  mon.s 			page 7
+
+
+ 301 01ee 0681 0000 		add.l	#0x0800, %d1
+ 301      0800 
+ 302 01f4 33C1 00FF 		move.w 	%d1, UTX1	/* Substitute the data for the transmitter register UTX1 */
+ 302      F906 
+ 303 01fa 6000 000A 		bra INTERPUT_END
+ 304               		
+ 305               	MASK_TRANSMITTER_INTERRUPT:
+ 306 01fe 0279 FFF8 		andi 	#0xfff8, USTCNT1 /* Mask the transmitter interrupt */
+ 306      00FF F900 
+ 307               		
+ 308               	INTERPUT_END:
+ 309 0206 46C2      		move.w	%d2, %SR	/* Restore running level */
+ 310 0208 4CDF 0004 		movem.l	(%sp)+, %d2
+ 311 020c 4E75      		rts
+ 312               	        
+ 313               	****************************************************************
+ 314               	**  PUTSTRING
+ 315               	**     Maker: Amira Ben Youssef
+ 316               	**  Reviewer: Zelal Denis Yildiz
+ 317               	****************************************************************
+ 318               	PUTSTRING:
+ 319               		/* Input: Channel ch -> d1, Head address p -> d2, No. of data -> d3 */
+ 320               		/* Output: no. of data actually sent -> d0 */
+ 321 020e 48E7 0880 		movem.l	%d4/%a0, -(%sp)
+ 322 0212 0C81 0000 		cmp.l	#0, %d1
+ 322      0000 
+ 323 0218 6600 0038 		bne	PUTSTRING_END	/* If ch =/= 0, end */
+ 324 021c 7800      		move.l	#0, %d4		/* d4 = sz */
+ 325 021e 2042      		move.l	%d2, %a0	/* a0 = i */
+ 326 0220 0C83 0000 		cmp.l	#0, %d3
+ 326      0000 
+ 327 0226 6700 0028 		beq	PUTSTRING_UPD_SZ
+ 328               		
+ 329               	PUTSTRING_LOOP:
+ 330 022a B684      		cmp.l	%d4, %d3	/* If sz == size */
+ 331 022c 6700 001A 		beq	PUTSTRING_UNMASK
+ 332 0230 1218      		move.b	(%a0)+, %d1	/* Put data in d1 */
+ 333 0232 7001      		move.l	#1, %d0		/* Use queue 1 */
+ 334 0234 4EBA 0090 		jsr	INQ
+ 335 0238 0C80 0000 		cmp.l	#0, %d0		/* If INQ failed*/
+ 335      0000 
+ 336 023e 6700 0008 		beq	PUTSTRING_UNMASK
+ 337 0242 5244      		addq	#1, %d4		/* Increment sz and i */
+ 338 0244 6000 FFE4 		bra	PUTSTRING_LOOP
+ 339               	
+ 340               	PUTSTRING_UNMASK:
+ 341 0248 0079 0007 		ori 	#0x0007, USTCNT1 	/* Permit the transmitter interrupt */
+ 341      00FF F900 
+ 342               	
+ 343               	PUTSTRING_UPD_SZ:	
+ 344 0250 2004      		move.l	%d4, %d0		/* %d0 <- sz */
+ 345               		
+ 346               	PUTSTRING_END:
+ 347 0252 4CDF 0110 		movem.l	(%sp)+, %d4/%a0
+ 348 0256 4E75      		rts
+ 349               	
+ 350               	****************************************************************
+68K GAS  mon.s 			page 8
+
+
+ 351               	**  GETSTRING
+ 352               	**     Maker: Zelal Denis Yildiz
+ 353               	**  Reviewer: Amira Ben Youssef
+ 354               	****************************************************************
+ 355               	GETSTRING:
+ 356               		/* Input: ch -> d1, head address of destination p -> d2, no. of data to be read -> d3 */
+ 357               		/* Output: no. of data actually read out -> d0 */
+ 358 0258 48E7 0880 		movem.l	%d4/%a0, -(%sp)
+ 359 025c 0C81 0000 		cmpi.l	#0, %d1
+ 359      0000 
+ 360 0262 6600 0026 		bne	GETSTRING_END		/* If ch =/= 0, end */
+ 361 0266 7800      		move.l	#0, %d4			/* d4 = sz (Used to count no. of data actually read out) */
+ 362 0268 2042      		move.l	%d2, %a0		/* a0 = i (NOT Index, but head address of destination) */
+ 363               		
+ 364               	
+ 365               	GETSTRING_LOOP:
+ 366 026a B684      		cmp.l	%d4, %d3		/* is sz == size? */
+ 367 026c 6700 001A 		beq	GETSTRING_UPD_SZ
+ 368 0270 7000      		move.l	#0, %d0			/* specify queue 0 */
+ 369 0272 4EBA 0080 		jsr	OUTQ			/* Call OUTQ, puts data in d1 */
+ 370 0276 0C80 0000 		cmpi.l	#0, %d0			/* If failure */
+ 370      0000 
+ 371 027c 6700 000A 		beq	GETSTRING_UPD_SZ	/* End GETSTRING */
+ 372 0280 10C1      		move.b	%d1, (%a0)+		/* Copy the data to address i */
+ 373 0282 5244      		addq	#1, %d4			/* Increment sz and i */
+ 374 0284 4EFA FFE4 		jmp	GETSTRING_LOOP
+ 375               	
+ 376               	GETSTRING_UPD_SZ:	
+ 377 0288 2004      		move.l	%d4, %d0		/* %d0 <- sz */
+ 378               		
+ 379               	GETSTRING_END:
+ 380 028a 4CDF 0110 		movem.l	(%sp)+, %d4/%a0
+ 381 028e 4E75      		rts
+ 382               	
+ 383               	*****************************************************************
+ 384               	**  Queues
+ 385               	**     Maker: Amira Ben youssef, Zelal Denis Yildiz
+ 386               	**  Reviewer: Moris Kim
+ 387               	*****************************************************************
+ 388               	INIT_Q:
+ 389 0290 48E7 0078 		movem.l	%a1-%a4, -(%sp)
+ 390               	  
+ 391 0294 43F9 0000 		lea.l	top, %a1		/*top address is a1*/
+ 391      0000 
+ 392 029a 45F9 0000 		lea.l  	inp, %a2
+ 392      0000 
+ 393 02a0 47F9 0000 		lea.l  	outp, %a3
+ 393      0000 
+ 394 02a6 49F9 0000 		lea.l  	s, %a4
+ 394      0000 
+ 395 02ac 24C9      		move.l	%a1, (%a2)+ 		/* Initialize inp, outp, and s for q0*/
+ 396 02ae 26C9      		move.l	%a1, (%a3)+
+ 397 02b0 38FC 0000 		move.w	#0, (%a4)+
+ 398 02b4 D2FC 0100 		adda  	#SIZE_of_QUEUE, %a1 	/* add offset for q1 */
+ 399 02b8 2489      		move.l	%a1, (%a2)  		/* Initialize inp, outp, and s for q1*/
+ 400 02ba 2689      		move.l	%a1, (%a3)
+ 401 02bc 38BC 0000 		move.w	#0, (%a4)
+68K GAS  mon.s 			page 9
+
+
+ 402 02c0 4CDF 1E00 		movem.l	(%sp)+, %a1-%a4
+ 403 02c4 4E75      		rts
+ 404               	
+ 405               	INQ:
+ 406               		/* Input: Queue no. -> %d0, Data -> %d1 */
+ 407               		/* Output: Success/fail -> %d0 */
+ 408 02c6 48E7 3C7C 		movem.l	%d2-%d5/%a1-%a5,-(%sp)    /* Save registers */
+ 409 02ca 4EBA 0058 		jsr	Q_START
+ 410 02ce 45F9 0000 		lea.l 	inp, %a2		  /* inp -> a2 */
+ 410      0000 
+ 411 02d4 D5C2      		adda.l  %d2, %a2  		  /* add offset */
+ 412 02d6 2252      		move.l  (%a2), %a1 		  /* a1 = in pointer */
+ 413 02d8 4EBA 0006 		jsr	INQ_SIZE_CHECK
+ 414 02dc 4EFA 0090 		jmp 	Q_FINISH
+ 415               	
+ 416               	INQ_SIZE_CHECK:
+ 417 02e0 0C53 0100 		cmp.w	#256, (%a3)  		 /* check if queue is full */
+ 418 02e4 6600 0006 		bne	INQ_SUCC	         /* if s not equals to 256 */
+ 419 02e8 6000 0080 		bra	Q_FAIL		 	 /* if s==256 */
+ 420               	
+ 421               	INQ_SUCC:
+ 422 02ec 1281      		move.b 	%d1, (%a1) 		 /* d1 = data moved into inp */
+ 423 02ee 5253      		addq    #1, (%a3)   		 /* Increment size */
+ 424 02f0 4EFA 004E 		jmp     Q_SUCC
+ 425               	
+ 426               	OUTQ:
+ 427               		/* Input: Queue no. -> %d0 */
+ 428               		/* Output: Success/fail -> %d0, Data -> %d1 */
+ 429 02f4 48E7 3C7C 		movem.l	%d2-%d5/%a1-%a5,-(%sp)   /* Save registers */
+ 430 02f8 4EBA 002A 		jsr     Q_START
+ 431 02fc 45F9 0000 		lea.l 	outp, %a2	         /* outp -> a2 */
+ 431      0000 
+ 432 0302 D5C2      		adda.l  %d2, %a2   		 /* add offset */
+ 433 0304 2252      		move.l  (%a2), %a1  		 /* a1 = out pointer */
+ 434               	
+ 435 0306 4EBA 0006 		jsr	OUTQ_SIZE_CHECK
+ 436 030a 4EFA 0062 		jmp 	Q_FINISH
+ 437               	
+ 438               	OUTQ_SIZE_CHECK:
+ 439 030e 0C53 0000 		cmp.w 	#0, (%a3)   		 /* check if queue is empty*/
+ 440 0312 6E00 0006 		bgt 	OUTQ_SUCC
+ 441 0316 6000 0052 		bra	Q_FAIL
+ 442               	
+ 443               	OUTQ_SUCC:
+ 444 031a 1211      		move.b	(%a1), %d1 		/* data is moved to d1*/
+ 445 031c 0453 0001 		subi.w  #1, (%a3)    		/* Decrement size */
+ 446               	
+ 447 0320 4EFA 001E 		jmp 	Q_SUCC
+ 448               	  
+ 449               	
+ 450               	/* These are common for both INQ and OUTQ */
+ 451               	Q_START:
+ 452 0324 40C5      		move.w	%SR, %d5   	 /* Save running level */
+ 453 0326 46FC 2700 		move.w 	#0x2700, %SR	 /* running level = 7 */
+ 454 032a 2400      		move.l 	%d0, %d2  	 /* d2 = pointer offset */
+ 455 032c C4FC 0004 		mulu	#4,  %d2  	 /* because address is stored in longword */
+ 456 0330 2600      		move.l  %d0, %d3  	 /* d3 = queue size pointer offset */
+68K GAS  mon.s 			page 10
+
+
+ 457 0332 C6FC 0002 		mulu	#2, %d3	  	 /* because address is stored in word */
+ 458 0336 47F9 0000 		lea.l	s,   %a3  	 /* size -> a3 */
+ 458      0000 
+ 459 033c D7C3      		adda.l  %d3, %a3   	 /* add offset */
+ 460 033e 4E75      		rts
+ 461               	
+ 462               	Q_SUCC:
+ 463 0340 2800      		move.l 	%d0, %d4  	 /* d4 = queue area offset */
+ 464 0342 C8FC 0100 		mulu	#SIZE_of_QUEUE, %d4
+ 465 0346 49F9 0000 		lea.l   top, %a4 	 /* a4 = head of queue area */
+ 465      0000 
+ 466 034c D9C4      		adda.l  %d4, %a4  	 /* adds offset */
+ 467 034e 2A4C      		move.l  %a4, %a5  	 /* a5 = bottom of queue area */
+ 468 0350 DBFC 0000 		adda.l  #255, %a5 	 /* the bottom is 255 from the top */
+ 468      00FF 
+ 469 0356 7001      		move.l  #1, %d0    	 /* success flag raised */
+ 470 0358 BAC9      		cmp	%a1, %a5	 /* compare inp/outp with bottom*/
+ 471 035a 6700 000A 		beq	Q_BACK		 /* reach the bottom */
+ 472 035e 6000 0002 		bra	Q_NEXT
+ 473               	
+ 474               	Q_NEXT:
+ 475 0362 5249      		addq	#1, %a1   	 /* increment input/output pointer*/
+ 476 0364 4E75      		rts
+ 477               	
+ 478               	Q_BACK:
+ 479 0366 224C      		move.l	%a4, %a1         /* input/output pointer set to head of queue area */
+ 480 0368 4E75      		rts	
+ 481               	
+ 482               	Q_FAIL:
+ 483 036a 7000      		move.l	#0, %d0   	 /* set flag to fail */
+ 484 036c 4E75      		rts
+ 485               	
+ 486               	Q_FINISH:
+ 487 036e 2489      		move.l	%a1, (%a2)   	 /* update inp/outp */
+ 488 0370 46C5      		move.w	%d5, %SR     	 /* restore previous running level */
+ 489 0372 4CDF 3E3C 		movem.l	(%sp)+,%d2-%d5/%a1-%a5  /* restore registers */
+ 490 0376 4E75      		rts
+ 491               	
+ 492               	.section .data
+ 493               	    .equ	SIZE_of_QUEUE,	256
+ 494               	
+ 495               	.section .bss
+ 496               	.even
+ 497 4000 0000 0000 	top:		.ds.b	SIZE_of_QUEUE*2
+ 497      0000 0000 
+ 497      0000 0000 
+ 497      0000 0000 
+ 497      0000 0000 
+ 498 4200 0000 0000 	inp:		.ds.l	2
+ 498      0000 0000 
+ 499 4208 0000 0000 	outp:		.ds.l	2
+ 499      0000 0000 
+ 500 4210 0000 0000 	s:		.ds.w	2
+ 501 4214 0000 0000 	task_p:		.ds.l	1
+ 502               	
+ 503               	            .even
+ 504               	
+68K GAS  mon.s 			page 11
+
+
+ 505               	****************************************************************
+ 506               	**	Data region with an initial value
+ 507               	****************************************************************
+ 508               	.section .data
+ 509 0000 2A2A 2A2A 	TMSG:		.ascii	"******\r\n"
+ 509      2A2A 0D0A 
+ 510               	            .even
+ 511 0008 0000      	TTC:		.dc.w	0
+ 512               	            .even
+ 513               	
+ 514               	****************************************************************
+ 515               	**	Data region without an initial value
+ 516               	****************************************************************
+ 517               	.section .bss
+ 518 4218 0000 0000 	BUF:		.ds.b	256
+ 518      0000 0000 
+ 518      0000 0000 
+ 518      0000 0000 
+ 518      0000 0000 
+ 519               	            .even
+ 520               	USR_STK:
+ 521 4318 0000 0000 	            .ds.b	0x4000
+ 521      0000 0000 
+ 521      0000 0000 
+ 521      0000 0000 
+ 521      0000 0000 
+ 522               	            .even
+ 523               	USR_STK_TOP:
+68K GAS  mon.s 			page 12
+
+
+DEFINED SYMBOLS
+               mon.s:68     .text:0000000000000000 monitor_begin
+               mon.s:7      *ABS*:0000000000000001 SYSCALL_NUM_GETSTRING
+               mon.s:8      *ABS*:0000000000000002 SYSCALL_NUM_PUTSTRING
+               mon.s:9      *ABS*:0000000000000003 SYSCALL_NUM_RESET_TIMER
+               mon.s:10     *ABS*:0000000000000004 SYSCALL_NUM_SET_TIMER
+               mon.s:15     *ABS*:0000000000fff000 REGBASE
+               mon.s:16     *ABS*:0000000000d00000 IOBASE
+               mon.s:20     *ABS*:0000000000fff300 IVR
+               mon.s:21     *ABS*:0000000000fff304 IMR
+               mon.s:22     *ABS*:0000000000fff30c ISR
+               mon.s:23     *ABS*:0000000000fff310 IPR
+               mon.s:27     *ABS*:0000000000fff600 TCTL1
+               mon.s:28     *ABS*:0000000000fff602 TPRER1
+               mon.s:29     *ABS*:0000000000fff604 TCMP1
+               mon.s:30     *ABS*:0000000000fff608 TCN1
+               mon.s:31     *ABS*:0000000000fff60a TSTAT1
+               mon.s:35     *ABS*:0000000000fff900 USTCNT1
+               mon.s:36     *ABS*:0000000000fff902 UBAUD1
+               mon.s:37     *ABS*:0000000000fff904 URX1
+               mon.s:38     *ABS*:0000000000fff906 UTX1
+               mon.s:42     *ABS*:0000000000d0002f LED7
+               mon.s:43     *ABS*:0000000000d0002d LED6
+               mon.s:44     *ABS*:0000000000d0002b LED5
+               mon.s:45     *ABS*:0000000000d00029 LED4
+               mon.s:46     *ABS*:0000000000d0003f LED3
+               mon.s:47     *ABS*:0000000000d0003d LED2
+               mon.s:48     *ABS*:0000000000d0003b LED1
+               mon.s:49     *ABS*:0000000000d00039 LED0
+               mon.s:50     *ABS*:0000000000fff419 PUSHSW
+               mon.s:56     .bss:0000000000000000 SYS_STK
+               mon.s:59     .bss:0000000000004000 SYS_STK_TOP
+               mon.s:168    .text:00000000000000d6 SYSCALL
+               mon.s:231    .text:000000000000016a INTERFACE
+               mon.s:198    .text:0000000000000118 TIMER_INTERRUPT
+               mon.s:388    .text:0000000000000290 INIT_Q
+               mon.s:102    .text:0000000000000062 MAIN
+               mon.s:523    .bss:0000000000008318 USR_STK_TOP
+               mon.s:142    .text:00000000000000a2 TT
+               mon.s:123    .text:000000000000007e LOOP
+               mon.s:518    .bss:0000000000004218 BUF
+               mon.s:511    .data:0000000000000008 TTC
+               mon.s:154    .text:00000000000000cc TTKILL
+               mon.s:509    .data:0000000000000000 TMSG
+               mon.s:158    .text:00000000000000d0 TTEND
+               mon.s:179    .text:0000000000000100 CALL_GETSTRING
+               mon.s:182    .text:0000000000000106 CALL_PUTSTRING
+               mon.s:185    .text:000000000000010c CALL_RESET_TIMER
+               mon.s:188    .text:0000000000000112 CALL_SET_TIMER
+               mon.s:355    .text:0000000000000258 GETSTRING
+               mon.s:318    .text:000000000000020e PUTSTRING
+               mon.s:208    .text:0000000000000138 RESET_TIMER
+               mon.s:211    .text:0000000000000142 SET_TIMER
+               mon.s:204    .text:0000000000000132 TIMER_INTERRUPT_END
+               mon.s:219    .text:0000000000000160 CALL_RP
+               mon.s:501    .bss:0000000000004214 task_p
+               mon.s:255    .text:000000000000019a CALL_INTERGET
+68K GAS  mon.s 			page 13
+
+
+               mon.s:250    .text:0000000000000190 CALL_INTERPUT
+               mon.s:246    .text:000000000000018a INTERFACE_END
+               mon.s:286    .text:00000000000001ca INTERPUT
+               mon.s:266    .text:00000000000001a6 INTERGET
+               mon.s:277    .text:00000000000001c4 INTERGET_END
+               mon.s:405    .text:00000000000002c6 INQ
+               mon.s:308    .text:0000000000000206 INTERPUT_END
+               mon.s:426    .text:00000000000002f4 OUTQ
+               mon.s:305    .text:00000000000001fe MASK_TRANSMITTER_INTERRUPT
+               mon.s:346    .text:0000000000000252 PUTSTRING_END
+               mon.s:343    .text:0000000000000250 PUTSTRING_UPD_SZ
+               mon.s:329    .text:000000000000022a PUTSTRING_LOOP
+               mon.s:340    .text:0000000000000248 PUTSTRING_UNMASK
+               mon.s:379    .text:000000000000028a GETSTRING_END
+               mon.s:365    .text:000000000000026a GETSTRING_LOOP
+               mon.s:376    .text:0000000000000288 GETSTRING_UPD_SZ
+               mon.s:497    .bss:0000000000004000 top
+               mon.s:498    .bss:0000000000004200 inp
+               mon.s:499    .bss:0000000000004208 outp
+               mon.s:500    .bss:0000000000004210 s
+                            *ABS*:0000000000000100 SIZE_of_QUEUE
+               mon.s:451    .text:0000000000000324 Q_START
+               mon.s:416    .text:00000000000002e0 INQ_SIZE_CHECK
+               mon.s:486    .text:000000000000036e Q_FINISH
+               mon.s:421    .text:00000000000002ec INQ_SUCC
+               mon.s:482    .text:000000000000036a Q_FAIL
+               mon.s:462    .text:0000000000000340 Q_SUCC
+               mon.s:438    .text:000000000000030e OUTQ_SIZE_CHECK
+               mon.s:443    .text:000000000000031a OUTQ_SUCC
+               mon.s:478    .text:0000000000000366 Q_BACK
+               mon.s:474    .text:0000000000000362 Q_NEXT
+               mon.s:520    .bss:0000000000004318 USR_STK
+
+UNDEFINED SYMBOLS
+start

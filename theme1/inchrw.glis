@@ -1,0 +1,74 @@
+68K GAS  inchrw.s 			page 1
+
+
+   1               	
+   2               	.global inbyte                  | Export inbyte function to other files
+   3               	
+   4               	.text
+   5               	.even
+   6               	
+   7               	inbyte:
+   8 0000 48E7 7000 	    movem.l %d1-%d3, -(%sp)     | Save registers that will be used
+   9               	inbyte_start:
+  10 0004 7001      	    move.l	#1, %d0             | System call number for GETSTRING
+  11 0006 7200      	    move.l	#0, %d1			    | Serial port number = 0
+  12 0008 243C 0000 	    move.l	#BUF_INBYTE, %d2    | Buffer address
+  12      0000 
+  13 000e 7601      	    move.l	#1, %d3             | Buffer size = 1 byte
+  14 0010 4E40      	    trap	#0                  | Initiate system call to GETSTRING
+  15               	
+  16 0012 0C00 0001 	    cmpi.b	#1, %d0             | Check if GETSTRING was successful (1 byte read)
+  17 0016 6600 FFEC 	    bne     inbyte_start        | If not, try again
+  18               	
+  19 001a 4280      	    clr.l	%d0
+  20 001c 1039 0000 	    move.b  BUF_INBYTE, %d0     | Move byte from buffer to %d0
+  20      0000 
+  21               	
+  22 0022 4CDF 000E 	    movem.l (%sp)+, %d1-%d3     | Restore registers
+  23 0026 4E75      	    rts                         | Return from function
+  24               	
+  25               	.section .bss
+  26 0000 00        	BUF_INBYTE: .ds.b 1             | 1 byte buffer for inbyte function
+  27 0001 00        	    .even
+  28               	
+  29               	/*
+  30               	.global inbyte                  | Export inbyte function to other files
+  31               	
+  32               	.text
+  33               	.even
+  34               	
+  35               	inbyte:
+  36               	    movem.l %d1-%d3, -(%sp)     | Save registers that will be used
+  37               	retry:
+  38               	    move.l  #1, %d0             | System call number for GETSTRING
+  39               	    move.l  #0, %d1             | Serial port number = 0
+  40               	    lea     BUF_INBYTE, %a0     | Load address of buffer into %a0
+  41               	    move.l  %a0, %d2            | Buffer address
+  42               	    move.l  #1, %d3             | Buffer size = 1 byte
+  43               	    trap    #0                  | Initiate system call to GETSTRING
+  44               	
+  45               	    tst.b   BUF_INBYTE          | Test if a byte was received
+  46               	    beq     retry               | If not, try again
+  47               	
+  48               	    clr.l   %d0
+  49               	    move.b  BUF_INBYTE, %d0     | Move byte from buffer to %d0
+  50               	
+  51               	    movem.l (%sp)+, %d1-%d3     | Restore registers
+  52               	    rts                         | Return from function
+  53               	
+  54               	.section .bss
+  55               	BUF_INBYTE: .ds.b 1             | 1 byte buffer for inbyte function
+68K GAS  inchrw.s 			page 2
+
+
+  56               	.even
+  57               	*/
+68K GAS  inchrw.s 			page 3
+
+
+DEFINED SYMBOLS
+            inchrw.s:7      .text:0000000000000000 inbyte
+            inchrw.s:9      .text:0000000000000004 inbyte_start
+            inchrw.s:26     .bss:0000000000000000 BUF_INBYTE
+
+NO UNDEFINED SYMBOLS
