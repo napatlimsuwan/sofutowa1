@@ -1,0 +1,78 @@
+68K GAS  outchr.s 			page 1
+
+
+   1               	/*
+   2               	.global outbyte                 | Export inbyte function to other files
+   3               	
+   4               	.text
+   5               	.even
+   6               	
+   7               	outbyte:
+   8               	    ** First argument (long word size) from C program is offset 4 from the top of the stack **
+   9               	    ** to get the byte size argument, we need to offset 3 more bytes from the beginning of the firs
+  10               	    ** so 7 is added to the stack pointer to get the byte sized argument sent from the C program **
+  11               	    move.b  7(%sp), BUF_OUTBYTE | Get outbyte argument from stack
+  12               	    movem.l %d0-%d3, -(%sp)     | Save registers that will be used
+  13               	outbyte_start:
+  14               	    move.l	#2, %d0             | System call number for PUTSTRING
+  15               	    move.l	#0, %d1             | Serial port number = 0
+  16               	    move.l	#BUF_OUTBYTE, %d2   | Buffer address
+  17               	    move.l	#1, %d3             | Buffer size = 1 byte
+  18               	    trap	#0                  | Initiate system call to PUTSTRING
+  19               	
+  20               	    cmpi.b	#1, %d0             | Check if PUTSTRING was successful (1 byte read)
+  21               	    bne     outbyte_start       | If not, try again
+  22               	
+  23               	    movem.l (%sp)+, %d0-%d3     | Restore registers
+  24               	    rts                         | Return from function
+  25               	
+  26               	.section .bss
+  27               	BUF_OUTBYTE:    .ds.b 1         | 1 byte Buffer for outbyte function
+  28               	    .even
+  29               	*/
+  30               	    
+  31               	.global outbyte                 | Export outbyte function to other files
+  32               	
+  33               	.text
+  34               	.even
+  35               	
+  36               	outbyte:
+  37               	    ** First argument (long word size) from C program is offset 4 from the top of the stack **
+  38               	    ** to get the byte size argument, we need to offset 3 more bytes from the beginning of the firs
+  39               	    ** so 7 is added to the stack pointer to get the byte sized argument sent from the C program **
+  40 0000 13EF 0007 	    move.b  7(%sp), outbyte_buffer | Get outbyte argument from stack
+  40      0000 0000 
+  41 0008 48E7 F000 	    movem.l %d0-%d3, -(%sp)     | Save registers that will be used
+  42               	outbyte_loop:
+  43 000c 7002      	    move.l	#2, %d0             | System call number for PUTSTRING
+  44 000e 7200      	    move.l	#0, %d1             | Serial port number = 0
+  45 0010 41F9 0000 	    lea     outbyte_buffer, %a0 | Load buffer address into %a0
+  45      0000 
+  46 0016 2408      	    move.l	%a0, %d2            | Pass buffer address to %d2
+  47 0018 7601      	    move.l	#1, %d3             | Buffer size = 1 byte
+  48 001a 4E40      	    trap	#0                  | Initiate system call to PUTSTRING
+  49               	
+  50 001c 4A00      	    tst.b   %d0                 | Check if PUTSTRING was successful (1 byte read)
+  51 001e 6700 FFEC 	    beq     outbyte_loop        | Retry if not successful
+  52               	
+  53 0022 4CDF 000F 	    movem.l (%sp)+, %d0-%d3     | Restore registers
+  54 0026 4E75      	    rts                         | Return from function
+  55               	
+68K GAS  outchr.s 			page 2
+
+
+  56               	.section .bss
+  57 0000 00        	outbyte_buffer:    .ds.b 1         | 1-byte buffer for outbyte function
+  58 0001 00        	.even
+  59               	   
+  60               	    
+  61               	    
+68K GAS  outchr.s 			page 3
+
+
+DEFINED SYMBOLS
+            outchr.s:36     .text:0000000000000000 outbyte
+            outchr.s:57     .bss:0000000000000000 outbyte_buffer
+            outchr.s:42     .text:000000000000000c outbyte_loop
+
+NO UNDEFINED SYMBOLS
