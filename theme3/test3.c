@@ -47,6 +47,40 @@
 #include <string.h>
 #include "mtk_c.h"
 
+/*
+// Define escape sequence prefix
+#define ESC "\x1b"
+
+// Cursor and screen management macros
+#define LOCATEHOME ESC "[H"
+#define CURSORMOVE ESC "[%d;%dH"
+#define CLEARDISPLAY ESC "[H" ESC "[2J"
+#define SAVECURSORLOC ESC "7"
+#define RETCURSORLOC ESC "8"
+#define CURSORINVISIBLE ESC "[?25l"
+#define CURSORVISIBLE ESC "[?25h"
+#define CHANGESCROLLROWS ESC "[%d;%dr"
+#define RESETSCROLLROWS ESC "[r"
+#define RESETSGR ESC "[0m"
+#define SGRCOL256 ESC "[38;5;%dm"
+#define SGRBGCOL256 ESC "[48;5;%dm"
+
+// Other terminal controls
+#define DECRESETMODE ESC "[?%dl"
+#define DECSETMODE ESC "[?%dh"
+
+// Common control characters
+#define BACKSPACE "\x7f"
+#define ENTER "\x0d"
+#define ESC "\x1b"
+
+// Application constants
+#define MAX 1024
+#define BUFLEN 100
+#define SECONDDIVIDER 100
+#define TOTALTIPS 4
+*/
+
 #define MAX 1024
 #define SECONDDIVIDER 100
 #define BUFLEN 100
