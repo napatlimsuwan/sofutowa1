@@ -64,6 +64,76 @@
 #define BUFLEN 100                      // Buffer length
 #define TOTALTIPS 4                     // Total number of tips
 
+/*
+// Global Variables and Constants
+
+// Shared Resource Variables (Used in Multiple Tasks)
+
+// Input and Command Management
+// Used in command_bar(), main_app()
+bool inappcom[2] = {true, true};       // Track if clients are in application communication mode
+char keypress[2] = {-1, -1};           // Last keypress for each client
+char last_keybuf[2][10];               // Buffer for storing last key sequences
+int last_keybuf_len[2];                // Length of the last key buffer
+char msg_buf[2][BUFLEN];               // Buffer for storing messages
+unsigned int msg_buf_len[2];           // Length of the message buffer
+char cmd_buf[2][BUFLEN];               // Buffer for storing commands
+unsigned int cmd_buf_len[2];           // Length of the command buffer
+
+// Tip Management
+// Used in command_bar(), main_app()
+int tip_num[2];                        // Indicates the current tip being displayed for each client.
+
+// Screen and UI Configuration
+// Used in runtime_clock(), command_bar(), main_app()
+unsigned int screen_height = 35;       // Height of the screen
+unsigned int screen_width = 203;       // Width of the screen
+// Used in runtime_clock(), main_app()
+unsigned int chat_row = 1;             // Row for chat content display
+
+// Other Shared Resources
+// Used in runtime_clock(), command_bar(), main_app()
+char printf_buf[BUFLEN];               // Buffer for formatted print outputs
+
+// Non-Shared Variables and Constants
+
+// Indices for managing two clients (Client1 and Client2)
+int i, j; 
+
+// Screen and Mode States
+bool in_alt_screen[2] = {false, false}; // Track if clients are in the alternate screen
+
+// Client Nicknames
+char client_nickname_color[2] = {11, 14}; // Color assigned to user nicknames
+char client_nickname[2][10] = {"USER1", "USER2"}; // Default user nicknames
+bool client_nickname_set[2] = {false, false}; // Track if nicknames are set
+
+// Terminal Input Handling
+int term_input_col[2]; // Current input column for each client
+
+// Terminal Control Sequences
+const char term_backspace[] = "\b \b";  // Backspace sequence for terminal
+const char term_line10[] = "\x1b[10;H"; // Move to line 10
+
+// Prompts
+const char msg_input_prompt[] = "Your message"; // Prompt for message input
+const char command_prompt[] = "Command: ";      // Prompt for command input
+
+// Tips
+const char tip_list[TOTALTIPS][BUFLEN] = {
+    "Press ESC to enter command mode",               // Tip 1
+    "Maximum length of each message is 100 characters", // Tip 2
+    "Functionality of the arrow keys is suppressed", // Tip 3
+    "Only help command is available for now"         // Tip 4
+};
+
+// Help Text
+const char help_text[] = 
+    "\n\x1b[1;4mManual page for the chat application\x1b[0m\n\n"
+    "This page should be populated when the application is finished.\n"
+    "Please press any key to go back.\n";
+*/
+
 // Global Variables and Constants
 
 // Indices for managing two clients (Client1 and Client2)
