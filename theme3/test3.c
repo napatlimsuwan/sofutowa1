@@ -171,6 +171,30 @@ unsigned int screen_height = 35;  // Height of the screen
 unsigned int screen_width = 203;  // Width of the screen
 unsigned int chat_row = 1;        // Row for chat content display
 
+/*
+
+// Shared Resource Variables (Used in Multiple Tasks)
+
+// Used in command_bar(), main_app()
+bool inappcom[2] = {true, true};       // Track if clients are in application communication mode
+char keypress[2] = {-1, -1};           // Last keypress for each client
+char last_keybuf[2][10];               // Buffer for storing last key sequences
+int last_keybuf_len[2];                // Length of the last key buffer
+char msg_buf[2][BUFLEN];               // Buffer for storing messages
+unsigned int msg_buf_len[2];           // Length of the message buffer
+char cmd_buf[2][BUFLEN];               // Buffer for storing commands
+unsigned int cmd_buf_len[2];           // Length of the command buffer
+int tip_num[2];                        // Indicates the current tip being displayed for each client.
+
+// Used in runtime_clock(), command_bar(), main_app()
+unsigned int screen_height = 35;       // Height of the screen
+unsigned int screen_width = 203;       // Width of the screen
+
+// Used in runtime_clock(), main_app()
+unsigned int chat_row = 1;             // Row for chat content display
+
+*/
+
 // Terminal Control Sequences
 const char term_backspace[] = "\b \b";  // Backspace sequence for terminal
 const char term_line10[] = "\x1b[10;H"; // Move to line 10
