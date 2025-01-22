@@ -1,0 +1,38 @@
+68K GAS  outchr.s 			page 1
+
+
+   1               	.global outbyte
+   2               	
+   3               	.text
+   4               	.even
+   5               	
+   6               	outbyte:                            | void outbyte(int ch, char c)
+   7 0000 13EF 000B 	    move.b  11(%sp), BUF_OUTBYTE    | get the second arg (c)
+   7      0000 0000 
+   8 0008 48E7 F000 	    movem.l %d0-%d3, -(%sp)
+   9               	outbyte_start:
+  10 000c 7002      	    move.l	#2, %d0             | PUTSTRING
+  11 000e 222F 0014 	    move.l  20(%sp), %d1            | get the first arg (ch)
+  12 0012 243C 0000 	    move.l	#BUF_OUTBYTE, %d2
+  12      0000 
+  13 0018 7601      	    move.l	#1, %d3
+  14 001a 4E40      	    trap	#0
+  15               	
+  16 001c 0C00 0001 	    cmpi.b	#1, %d0
+  17 0020 6600 FFEA 	    bne     outbyte_start
+  18               	
+  19 0024 4CDF 000F 	    movem.l (%sp)+, %d0-%d3
+  20 0028 4E75      	    rts
+  21               	
+  22               	.section .bss
+  23 0000 00        	BUF_OUTBYTE:    .ds.b 1
+  24 0001 00        	    .even
+68K GAS  outchr.s 			page 2
+
+
+DEFINED SYMBOLS
+            outchr.s:6      .text:0000000000000000 outbyte
+            outchr.s:23     .bss:0000000000000000 BUF_OUTBYTE
+            outchr.s:9      .text:000000000000000c outbyte_start
+
+NO UNDEFINED SYMBOLS

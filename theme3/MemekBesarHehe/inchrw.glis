@@ -1,0 +1,64 @@
+68K GAS  inchrw.s 			page 1
+
+
+   1               	.global inbyte
+   2               	.global inkeyw
+   3               	
+   4               	.text
+   5               	.even
+   6               	
+   7               	inbyte:
+   8 0000 48E7 7000 	    movem.l %d1-%d3, -(%sp)     | char inbyte(int ch)
+   9               	inbyte_start:
+  10 0004 7001      	    move.l	#1, %d0             | GETSTRING
+  11 0006 222F 0010 	    move.l	16(%sp), %d1		| get the first arg (ch)	    
+  12 000a 243C 0000 	    move.l	#BUF_INBYTE, %d2
+  12      0000 
+  13 0010 7601      	    move.l	#1, %d3
+  14 0012 4E40      	    trap	#0
+  15               	
+  16 0014 0C00 0001 	    cmpi.b	#1, %d0
+  17 0018 6600 FFEA 	    bne     inbyte_start
+  18               	
+  19 001c 4280      	    clr.l	%d0
+  20 001e 1039 0000 	    move.b  BUF_INBYTE, %d0
+  20      0000 
+  21               	    | no need to clear the buffer in inbyte
+  22 0024 4CDF 000E 	    movem.l (%sp)+, %d1-%d3
+  23 0028 4E75      	    rts
+  24               	
+  25               	inkeyw:
+  26 002a 48E7 7000 	    movem.l %d1-%d3, -(%sp)     | char inkeyw(int ch)
+  27               	
+  28 002e 7001      	    move.l	#1, %d0             | GETSTRING 
+  29 0030 222F 0010 	    move.l	16(%sp), %d1		| get the first arg (ch)	    
+  30 0034 243C 0000 	    move.l	#BUF_INKEY, %d2
+  30      0000 
+  31 003a 7601      	    move.l	#1, %d3
+  32 003c 4E40      	    trap	#0
+  33               	
+  34 003e 4280      	    clr.l	%d0
+  35 0040 1039 0000 	    move.b  BUF_INKEY, %d0
+  35      0000 
+  36 0046 13FC 0000 	    move.b  #0, BUF_INKEY       | clear the buffer
+  36      0000 0000 
+  37               	
+  38 004e 4CDF 000E 	    movem.l (%sp)+, %d1-%d3
+  39 0052 4E75      	    rts
+  40               	
+  41               	.section .bss
+  42 0000 00        	BUF_INBYTE: .ds.b 1             | buffer for inbyte
+  43 0001 00        	    .even
+  44 0002 00        	BUF_INKEY: .ds.b 1              | buffer for inkeyw           
+  45 0003 00        	    .even
+68K GAS  inchrw.s 			page 2
+
+
+DEFINED SYMBOLS
+            inchrw.s:7      .text:0000000000000000 inbyte
+            inchrw.s:25     .text:000000000000002a inkeyw
+            inchrw.s:9      .text:0000000000000004 inbyte_start
+            inchrw.s:42     .bss:0000000000000000 BUF_INBYTE
+            inchrw.s:44     .bss:0000000000000002 BUF_INKEY
+
+NO UNDEFINED SYMBOLS

@@ -1,0 +1,197 @@
+68K GAS  mtk_asm.s 			page 1
+
+
+   1               	.global first_task
+   2               	.global pv_handler
+   3               	.global P
+   4               	.global V
+   5               	.global swtch
+   6               	.global hard_clock
+   7               	.global init_timer
+   8               	
+   9               	.global runtime
+  10               	
+  11               	** External variables from mtk_c.c **
+  12               	.extern task_tab
+  13               	.extern curr_task
+  14               	.extern next_task
+  15               	.extern p_body
+  16               	.extern v_body
+  17               	.extern ready
+  18               	.extern sched
+  19               	.extern addq
+  20               	
+  21               	.section .text
+  22               	.even
+  23               	
+  24               	************************************************************************
+  25               	** first_task
+  26               	** Subroutine to start the first task
+  27               	************************************************************************
+  28               	first_task:
+  29 0000 46FC 2700 	    move.w  #0x2700, %sr
+  30               	get_tcm:
+  31 0004 2039 0000 	    move.l  curr_task, %d0
+  31      0000 
+  32 000a C0FC 0014 	    mulu.w  #20, %d0
+  33 000e 41F9 0000 	    lea.l   task_tab, %a0
+  33      0000 
+  34 0014 D1C0      	    add.l   %d0, %a0                | %a0 = &task_tab[curr_task]
+  35 0016 2E68 0004 	    move.l  4(%a0), %sp             | restore SSP
+  36 001a 225F      	    move.l  (%sp)+, %a1             | restore USP from SSP
+  37 001c 4E61      	    move.l  %a1, %usp
+  38 001e 4CDF 7FFF 	    movem.l (%sp)+, %d0-%d7/%a0-%a6 | restore registers from SSP
+  39 0022 4E73      	    rte                             | restore SR and return
+  40               	
+  41               	************************************************************************
+  42               	** pv_handler
+  43               	** trap #1 handler for P and V system calls
+  44               	************************************************************************
+  45               	pv_handler:
+  46 0024 46FC 2700 	    move.w  #0x2700, %sr    
+  47 0028 2F01      	    move.l  %d1, -(%sp)         | save the value of argument on top of stack
+  48               	
+  49 002a 0C80 0000 	    cmp.l   #0, %d0
+  49      0000 
+  50 0030 6700 0010 	    beq     call_p_body
+  51 0034 0C80 0000 	    cmp.l   #1, %d0
+  51      0001 
+  52 003a 6700 0010 	    beq     call_v_body
+  53               	
+68K GAS  mtk_asm.s 			page 2
+
+
+  54               	end_pv_handler:
+  55 003e 221F      	    move.l  (%sp)+, %d1         
+  56 0040 4E73      	    rte                         | restore SR and return
+  57               	
+  58               	call_p_body:
+  59 0042 4EB9 0000 	    jsr     p_body              | call C's function 'p_body()'
+  59      0000 
+  60 0048 6000 FFF4 	    bra     end_pv_handler
+  61               	call_v_body:
+  62 004c 4EB9 0000 	    jsr     v_body              | call C's function 'v_body()'
+  62      0000 
+  63 0052 6000 FFEA 	    bra     end_pv_handler
+  64               	
+  65               	************************************************************************
+  66               	** P
+  67               	** Entrance of P system call
+  68               	** Input: semaphore ID
+  69               	************************************************************************
+  70               	P:
+  71 0056 48E7 C000 	    movem.l %d0-%d1, -(%sp)
+  72 005a 7000      	    move.l	#0,	%d0             | d0 <- 0 to call p_body
+  73 005c 222F 000C 		move.l	12(%sp), %d1        | get semaphore ID
+  74 0060 4E41      		trap	#1
+  75 0062 4CDF 0003 	    movem.l (%sp)+, %d0-%d1 
+  76 0066 4E75      		rts
+  77               	   
+  78               	************************************************************************
+  79               	** V
+  80               	** Entrance of V system call
+  81               	** Input: semaphore ID
+  82               	************************************************************************ 
+  83               	V:
+  84 0068 48E7 C000 	    movem.l %d0-%d1, -(%sp)
+  85 006c 7001      	    move.l	#1,	%d0             | d0 <- 1 to call v_body
+  86 006e 222F 000C 		move.l	12(%sp), %d1        | get semaphore ID
+  87 0072 4E41      		trap	#1
+  88 0074 4CDF 0003 	    movem.l (%sp)+, %d0-%d1
+  89 0078 4E75      		rts
+  90               	
+  91               	************************************************************************
+  92               	** swtch
+  93               	** Subroutine to switch tasks
+  94               	************************************************************************
+  95               	swtch:
+  96 007a 40E7      	    move.w  %sr, -(%sp)
+  97 007c 48E7 FFFE 	    movem.l %d0-%d7/%a0-%a6, -(%sp)
+  98 0080 4E69      	    move.l  %usp, %a1
+  99 0082 2F09      	    move.l  %a1, -(%sp)
+ 100               	
+ 101 0084 2039 0000 	    move.l  curr_task, %d0
+ 101      0000 
+ 102 008a C0FC 0014 	    mulu.w  #20, %d0
+ 103 008e 41F9 0000 	    lea.l   task_tab, %a0
+ 103      0000 
+ 104 0094 D1C0      	    add.l   %d0, %a0                | %a0 = &task_tab[curr_task]
+ 105 0096 214F 0004 	    move.l  %sp, 4(%a0)             | save SSP
+ 106               	
+68K GAS  mtk_asm.s 			page 3
+
+
+ 107 009a 23F9 0000 	    move.l  next_task, curr_task    | curr_task = next_task
+ 107      0000 0000 
+ 107      0000 
+ 108               	
+ 109 00a4 6000 FF5E 	    bra     get_tcm                 | get the new task's info (similar to first_task)
+ 110               	
+ 111               	************************************************************************
+ 112               	** hard_clock
+ 113               	** Subroutine to call at every timer interrupt
+ 114               	************************************************************************
+ 115               	hard_clock:
+ 116 00a8 48E7 FFFE 	    movem.l %d0-%d7/%a0-%a6, -(%sp)
+ 117 00ac 52B9 0000 	    addq.l  #1, runtime             | increment runtime
+ 117      0000 
+ 118 00b2 2F39 0000 	    move.l  curr_task, -(%sp)
+ 118      0000 
+ 119 00b8 2F3C 0000 	    move.l  #ready, -(%sp)
+ 119      0000 
+ 120 00be 4EB9 0000 	    jsr     addq                    | call addq with two arguments on top of stack
+ 120      0000 
+ 121 00c4 508F      	    addq.l	#8, %sp                 | pop the curr_task and ready off the stack
+ 122               	
+ 123 00c6 4EB9 0000 	    jsr     sched
+ 123      0000 
+ 124 00cc 4EBA FFAC 	    jsr     swtch
+ 125               	
+ 126 00d0 4CDF 7FFF 	    movem.l (%sp)+, %d0-%d7/%a0-%a6
+ 127 00d4 4E75      	    rts
+ 128               	
+ 129               	************************************************************************
+ 130               	** init_timer
+ 131               	** Reset and set timer with subroutine call to hard_clock
+ 132               	************************************************************************
+ 133               	init_timer:
+ 134 00d6 7003      		move.l	#3, %d0           | Set to call SYSCALL_NUM_RESET_TIMER
+ 135 00d8 4E40      		trap	#0
+ 136               	
+ 137 00da 7004      	    move.l	#4, %d0           | Set to call SYSCALL_NUM_SET_TIMER
+ 138 00dc 323C 0064 	    move.w	#100, %d1	      | Set cmp value to 10 ms cycle
+ 139 00e0 243C 0000 		move.l	#hard_clock, %d2    
+ 139      0000 
+ 140 00e6 4E40      		trap	#0
+ 141               	
+ 142 00e8 4E75      	    rts
+ 143               	
+ 144               	.section .data
+ 145 0000 0000 0001 	runtime: .dc.l 1
+ 146               	    .even
+68K GAS  mtk_asm.s 			page 4
+
+
+DEFINED SYMBOLS
+           mtk_asm.s:28     .text:0000000000000000 first_task
+           mtk_asm.s:45     .text:0000000000000024 pv_handler
+           mtk_asm.s:70     .text:0000000000000056 P
+           mtk_asm.s:83     .text:0000000000000068 V
+           mtk_asm.s:95     .text:000000000000007a swtch
+           mtk_asm.s:115    .text:00000000000000a8 hard_clock
+           mtk_asm.s:133    .text:00000000000000d6 init_timer
+           mtk_asm.s:145    .data:0000000000000000 runtime
+           mtk_asm.s:30     .text:0000000000000004 get_tcm
+           mtk_asm.s:58     .text:0000000000000042 call_p_body
+           mtk_asm.s:61     .text:000000000000004c call_v_body
+           mtk_asm.s:54     .text:000000000000003e end_pv_handler
+
+UNDEFINED SYMBOLS
+curr_task
+task_tab
+p_body
+v_body
+next_task
+ready
+addq
+sched
